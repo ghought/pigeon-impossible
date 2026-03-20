@@ -1,0 +1,11 @@
+{
+  "name": "pigeon-impossible",
+  "version": "1.0.0",
+  "description": "8-bit NYC pigeon chaos simulator",
+  "scripts": {
+    "start": "npx serve -s . -l $PORT"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

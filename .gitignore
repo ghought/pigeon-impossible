@@ -1,0 +1,4 @@
+node_modules/
+pigeon_extracted/
+pedestrian_extracted/
+*.zip
