@@ -418,7 +418,7 @@ canvas.addEventListener('mousedown', e => {
   const rect = canvas.getBoundingClientRect();
   const cx = (e.clientX - rect.left) / rect.width * NATIVE_W;
   const cy = (e.clientY - rect.top) / rect.height * NATIVE_H;
-  if (cx >= NATIVE_W - 22 && cx <= NATIVE_W - 4 && cy >= NATIVE_H - 18 && cy <= NATIVE_H - 2) {
+  if (cx >= NATIVE_W - 30 && cx <= NATIVE_W - 4 && cy >= NATIVE_H - 18 && cy <= NATIVE_H - 2) {
     soundMuted = !soundMuted;
     return;
   }
@@ -1127,9 +1127,9 @@ function draw() {
   // Obstacles (draw anchored to ground using full asset size)
   const obstacleDraw = {
     hydrant: { w: 24, h: 34, offsetY: 2 },
-    trashcan: { w: 28, h: 40, offsetY: 2 },
+    trashcan: { w: 28, h: 40, offsetY: 6 },
     lamppost: { w: 22, h: 58, offsetY: 2 },
-    hotdog_cart: { w: 44, h: 44, offsetY: 2 },
+    hotdog_cart: { w: 44, h: 44, offsetY: 6 },
   };
   obstacles.forEach(o => {
     const img = assets[o.type];
@@ -1368,7 +1368,7 @@ function draw() {
 }
 
 function drawSoundIcon() {
-  const ix = NATIVE_W - 20, iy = NATIVE_H - 16;
+  const ix = NATIVE_W - 30, iy = NATIVE_H - 16;
   ctx.globalAlpha = 0.6;
   // Speaker body
   ctx.fillStyle = '#ffffff';
