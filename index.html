@@ -42,10 +42,13 @@ const SCALE = Math.max(1, Math.min(
   Math.floor(window.innerHeight / NATIVE_H),
   3
 ));
+// On small screens, use fractional scaling to fill width
+const mobileScale = Math.min(window.innerWidth / NATIVE_W, window.innerHeight / NATIVE_H);
+const finalScale = (SCALE < 2 && mobileScale < 2) ? mobileScale : SCALE;
 canvas.width = NATIVE_W;
 canvas.height = NATIVE_H;
-canvas.style.width = NATIVE_W * SCALE + 'px';
-canvas.style.height = NATIVE_H * SCALE + 'px';
+canvas.style.width = Math.floor(NATIVE_W * finalScale) + 'px';
+canvas.style.height = Math.floor(NATIVE_H * finalScale) + 'px';
 
 // ============================================================
 // 8-BIT SOUND ENGINE (Web Audio API)
@@ -101,6 +104,9 @@ const ASSET_DIMS = {
   hotdog_cart: { w: 48, h: 48 },
   helicopter: { w: 96, h: 48 },
   tileset: { w: 128, h: 128 },
+  shoe: { w: 32, h: 32 },
+  bullet: { w: 32, h: 32 },
+  missile: { w: 32, h: 32 },
 };
 
 const assetSources = {
@@ -119,6 +125,9 @@ const assetSources = {
   hotdog_cart: 'assets/hotdog_cart.png',
   helicopter: 'assets/helicopter.png',
   tileset: 'assets/tileset.png',
+  shoe: 'assets/shoe.png',
+  bullet: 'assets/bullet.png',
+  missile: 'assets/missile.png',
 };
 
 let assetsLoaded = 0;
@@ -331,6 +340,52 @@ const pigeon = {
 const keys = {};
 let mouseDown = false;
 let touchActive = false;
+let isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window && window.innerWidth < 1024);
+// Auto-detect mobile on first touch
+window.addEventListener('touchstart', () => { isMobile = true; }, { once: true });
+
+// Virtual touch buttons state
+const touchButtons = {
+  left: false, right: false, flap: false, dive: false, poop: false
+};
+let activeTouches = {};
+
+function getTouchButton(tx, ty) {
+  // Convert page coords to canvas-relative coords
+  const rect = canvas.getBoundingClientRect();
+  const cx = (tx - rect.left) / rect.width * NATIVE_W;
+  const cy = (ty - rect.top) / rect.height * NATIVE_H;
+
+  if (state !== GameState.PLAYING) return null;
+
+  // Left side: D-pad (bottom-left)
+  // Left arrow: x 10-65, y 245-295
+  if (cx >= 10 && cx <= 65 && cy >= 245 && cy <= 295) return 'left';
+  // Right arrow: x 85-140, y 245-295
+  if (cx >= 85 && cx <= 140 && cy >= 245 && cy <= 295) return 'right';
+
+  // Right side: Action buttons
+  // Flap (top-right): x 420-490, y 215-260
+  if (cx >= 410 && cx <= 500 && cy >= 210 && cy <= 260) return 'flap';
+  // Dive (bottom-right): x 420-490, y 265-310
+  if (cx >= 410 && cx <= 500 && cy >= 265 && cy <= 310) return 'dive';
+  // Poop (mid-right): x 350-410, y 245-290
+  if (cx >= 340 && cx <= 410 && cy >= 240 && cy <= 290) return 'poop';
+
+  return null;
+}
+
+function updateTouchButtons() {
+  touchButtons.left = false;
+  touchButtons.right = false;
+  touchButtons.flap = false;
+  touchButtons.dive = false;
+  touchButtons.poop = false;
+  for (const id in activeTouches) {
+    const btn = activeTouches[id];
+    if (btn) touchButtons[btn] = true;
+  }
+}
 
 function handleStart(e) {
   initAudio();
@@ -355,8 +410,42 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 canvas.addEventListener('mousedown', e => { mouseDown = true; handleStart(e); });
 canvas.addEventListener('mouseup', () => { mouseDown = false; });
-canvas.addEventListener('touchstart', e => { e.preventDefault(); touchActive = true; handleStart(e); }, { passive: false });
-canvas.addEventListener('touchend', e => { e.preventDefault(); touchActive = false; }, { passive: false });
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  initAudio();
+  if (state !== GameState.PLAYING) { handleStart(e); return; }
+  for (const t of e.changedTouches) {
+    const btn = getTouchButton(t.pageX, t.pageY);
+    activeTouches[t.identifier] = btn;
+  }
+  updateTouchButtons();
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    const btn = getTouchButton(t.pageX, t.pageY);
+    activeTouches[t.identifier] = btn;
+  }
+  updateTouchButtons();
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    delete activeTouches[t.identifier];
+  }
+  updateTouchButtons();
+}, { passive: false });
+
+canvas.addEventListener('touchcancel', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    delete activeTouches[t.identifier];
+  }
+  updateTouchButtons();
+}, { passive: false });
 
 // ============================================================
 // ENTITY ARRAYS
@@ -573,7 +662,7 @@ function update() {
   }
 
   // -- PIGEON CONTROLS --
-  const wantsFlap = keys['Space'] || keys['ArrowUp'] || keys['KeyW'] || mouseDown || touchActive;
+  const wantsFlap = keys['Space'] || keys['ArrowUp'] || keys['KeyW'] || touchButtons.flap;
 
   if (wantsFlap && !pigeon.flapHeld) {
     pigeon.vy = FLAP_FORCE;
@@ -588,11 +677,11 @@ function update() {
     pigeon.vy -= 0.4;
   }
 
-  if (keys['ArrowLeft'] || keys['KeyA']) pigeon.vx = -3;
-  else if (keys['ArrowRight'] || keys['KeyD']) pigeon.vx = 3;
+  if (keys['ArrowLeft'] || keys['KeyA'] || touchButtons.left) pigeon.vx = -3;
+  else if (keys['ArrowRight'] || keys['KeyD'] || touchButtons.right) pigeon.vx = 3;
   else pigeon.vx *= 0.88;
 
-  if (keys['ArrowDown'] || keys['KeyS']) {
+  if (keys['ArrowDown'] || keys['KeyS'] || touchButtons.dive) {
     if (!pigeon.isDiving) sfxDive();
     pigeon.isDiving = true;
     pigeon.vy = DIVE_SPEED;
@@ -600,7 +689,7 @@ function update() {
     pigeon.isDiving = false;
   }
 
-  if (keys['KeyE'] || keys['ShiftLeft'] || keys['ShiftRight']) spawnPoop();
+  if (keys['KeyE'] || keys['ShiftLeft'] || keys['ShiftRight'] || touchButtons.poop) spawnPoop();
 
   // Physics
   pigeon.vy += GRAVITY;
@@ -701,7 +790,7 @@ function update() {
         if (dist < 220 && dist > 10) {
           projectiles.push({
             x: p.x + p.w / 2, y: p.y + 10,
-            w: 6, h: 6,
+            w: 10, h: 10,
             vx: (dx / dist) * 3.5, vy: (dy / dist) * 3.5,
             life: 90,
             type: p.isSwat ? 'bullet' : 'shoe',
@@ -805,7 +894,7 @@ function update() {
       h.shootCooldown = 50 + Math.random() * 50;
       projectiles.push({
         x: h.x + h.w / 2, y: h.y + h.h,
-        w: 4, h: 8, vx: -0.5, vy: 4,
+        w: 10, h: 14, vx: -0.5, vy: 4,
         life: 100, type: 'missile',
       });
     }
@@ -1082,23 +1171,49 @@ function draw() {
 
   // Projectiles
   projectiles.forEach(p => {
-    if (p.type === 'bullet') {
-      ctx.fillStyle = '#ffcc00';
-      ctx.fillRect(p.x, p.y, p.w, p.h);
-      ctx.fillStyle = '#ffee66';
-      ctx.fillRect(p.x + 1, p.y + 1, 2, 2);
+    const drawSize = Math.max(p.w, p.h) + 8; // draw bigger than hitbox for visibility
+    const dx = p.x - 4, dy = p.y - 4;
+    const assetImg = assets[p.type];
+    if (assetImg) {
+      ctx.drawImage(assetImg, dx, dy, drawSize, drawSize);
+    } else if (p.type === 'bullet') {
+      // Bright glowing bullet fallback
+      ctx.fillStyle = '#ffee44';
+      ctx.shadowColor = '#ffcc00';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(p.x + p.w/2, p.y + p.h/2, 5, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(p.x + p.w/2, p.y + p.h/2, 2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
     } else if (p.type === 'missile') {
-      ctx.fillStyle = '#cc3333';
-      ctx.fillRect(p.x, p.y, p.w, p.h);
-      ctx.fillStyle = '#ff6644';
-      ctx.fillRect(p.x, p.y - 3, 3, 3);
-      ctx.fillStyle = '#ffaa44';
-      ctx.fillRect(p.x, p.y - 5, 2, 3);
+      // Bright red missile fallback
+      ctx.fillStyle = '#ff2222';
+      ctx.fillRect(p.x - 2, p.y - 2, p.w + 4, p.h + 4);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(p.x, p.y, 3, 3);
+      // Flame trail
+      ctx.fillStyle = '#ffaa00';
+      ctx.fillRect(p.x - 1, p.y + p.h, 4, 5);
+      ctx.fillStyle = '#ff4400';
+      ctx.fillRect(p.x, p.y + p.h + 3, 3, 4);
     } else {
-      ctx.fillStyle = '#664422';
-      ctx.fillRect(p.x, p.y, p.w, p.h);
-      ctx.fillStyle = '#553311';
-      ctx.fillRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
+      // Shoe fallback - more visible brown shoe shape
+      ctx.fillStyle = '#996633';
+      ctx.fillRect(p.x - 3, p.y - 2, p.w + 6, p.h + 4);
+      ctx.fillStyle = '#775522';
+      ctx.fillRect(p.x - 1, p.y, p.w + 2, p.h);
+      ctx.fillStyle = '#ddaa66';
+      ctx.fillRect(p.x, p.y + 1, 3, 2);
+    }
+    // Warning indicator - red pulsing outline for all projectiles
+    if (p.life > 60) {
+      ctx.strokeStyle = `rgba(255,50,50,${0.4 + Math.sin(Date.now() * 0.015) * 0.3})`;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(p.x - 5, p.y - 5, p.w + 10, p.h + 10);
     }
   });
 
@@ -1304,8 +1419,10 @@ function drawHUD(tier) {
     ctx.restore();
   }
 
-  // Controls hint
-  if (distance < 500) {
+  // Controls hint (keyboard) or touch buttons (mobile)
+  if (isMobile) {
+    drawTouchControls();
+  } else if (distance < 500) {
     ctx.globalAlpha = Math.max(0, 1 - distance / 500);
     ctx.fillStyle = '#ffffff';
     ctx.font = '6px "Press Start 2P", monospace';
@@ -1314,6 +1431,51 @@ function drawHUD(tier) {
     ctx.textAlign = 'left';
     ctx.globalAlpha = 1;
   }
+}
+
+function drawTouchControls() {
+  ctx.globalAlpha = 0.35;
+
+  // D-pad left side
+  const dpadColor = '#ffffff';
+  const activeColor = '#ffcc00';
+
+  // Left button
+  ctx.fillStyle = touchButtons.left ? activeColor : dpadColor;
+  ctx.fillRect(15, 252, 45, 35);
+  ctx.fillStyle = '#000';
+  ctx.font = '14px "Press Start 2P", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('\u25C0', 37, 275);
+
+  // Right button
+  ctx.fillStyle = touchButtons.right ? activeColor : dpadColor;
+  ctx.fillRect(90, 252, 45, 35);
+  ctx.fillStyle = '#000';
+  ctx.fillText('\u25B6', 112, 275);
+
+  // Action buttons right side
+  // Flap button (top)
+  ctx.fillStyle = touchButtons.flap ? activeColor : '#66bbff';
+  ctx.fillRect(425, 218, 60, 38);
+  ctx.fillStyle = '#000';
+  ctx.font = '7px "Press Start 2P", monospace';
+  ctx.fillText('FLAP', 455, 241);
+
+  // Dive button (bottom)
+  ctx.fillStyle = touchButtons.dive ? activeColor : '#ff6666';
+  ctx.fillRect(425, 268, 60, 38);
+  ctx.fillStyle = '#000';
+  ctx.fillText('DIVE', 455, 291);
+
+  // Poop button (middle-left of action buttons)
+  ctx.fillStyle = touchButtons.poop ? activeColor : '#88dd66';
+  ctx.fillRect(355, 248, 55, 35);
+  ctx.fillStyle = '#000';
+  ctx.fillText('POOP', 382, 270);
+
+  ctx.textAlign = 'left';
+  ctx.globalAlpha = 1;
 }
 
 function drawTitleScreen() {
