@@ -1058,26 +1058,33 @@ function draw() {
   });
 
   // ---- GROUND AREA ----
-  // Sidewalk surface with tileset
-  const tileImg = assets.tileset;
+  // Sidewalk base
+  ctx.fillStyle = '#b0a89a';
+  ctx.fillRect(0, GROUND_Y, NATIVE_W, 22);
+
+  // Sidewalk tile lines (subtle grid pattern)
   const tileW = 32;
   const sidewalkOffset = (distance * SCROLL_SPEED) % tileW;
-  ctx.fillStyle = '#999999';
-  ctx.fillRect(0, GROUND_Y, NATIVE_W, 22);
+  ctx.fillStyle = '#9e968a';
   for (let x = -sidewalkOffset; x < NATIVE_W; x += tileW) {
-    ctx.drawImage(tileImg, 0, 0, 32, 32, x, GROUND_Y, tileW, 22);
+    ctx.fillRect(x, GROUND_Y, 1, 22); // vertical lines
   }
+  // Horizontal line in middle of sidewalk
+  ctx.fillStyle = '#a59d91';
+  ctx.fillRect(0, GROUND_Y + 11, NATIVE_W, 1);
 
-  // Sidewalk edge highlight
-  ctx.fillStyle = '#aaaaaa';
+  // Sidewalk top edge highlight
+  ctx.fillStyle = '#c4bdb0';
   ctx.fillRect(0, GROUND_Y, NATIVE_W, 1);
 
   // Curb (3D-ish pixel curb)
-  ctx.fillStyle = '#888888';
-  ctx.fillRect(0, GROUND_Y + 22, NATIVE_W, 2);
-  ctx.fillStyle = '#666666';
-  ctx.fillRect(0, GROUND_Y + 24, NATIVE_W, 3);
-  ctx.fillStyle = '#555555';
+  ctx.fillStyle = '#8a8278';
+  ctx.fillRect(0, GROUND_Y + 22, NATIVE_W, 1);
+  ctx.fillStyle = '#706860';
+  ctx.fillRect(0, GROUND_Y + 23, NATIVE_W, 3);
+  ctx.fillStyle = '#5a5450';
+  ctx.fillRect(0, GROUND_Y + 26, NATIVE_W, 1);
+  ctx.fillStyle = '#484440';
   ctx.fillRect(0, GROUND_Y + 27, NATIVE_W, 1);
 
   // Road surface
@@ -1101,10 +1108,14 @@ function draw() {
   ctx.fillStyle = '#555555';
   ctx.fillRect(0, NATIVE_H - 2, NATIVE_W, 2);
 
-  // Obstacles
+  // Obstacles (draw anchored to ground)
   obstacles.forEach(o => {
     const img = assets[o.type];
-    if (img) ctx.drawImage(img, o.x, o.y, o.w, o.h);
+    if (img) {
+      // Draw from ground up, using obstacle draw height
+      const drawY = GROUND_Y - o.h;
+      ctx.drawImage(img, o.x, drawY, o.w, o.h);
+    }
   });
 
   // Pedestrians
