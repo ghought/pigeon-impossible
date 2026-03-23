@@ -2,20 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="screen-orientation" content="landscape">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>PIGEON IMPOSSIBLE</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
+  html, body {
     background: #0a0a1a;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     height: 100vh;
+    height: 100dvh;
+    width: 100vw;
     font-family: 'Press Start 2P', monospace;
     overflow: hidden;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
   canvas {
     image-rendering: pixelated;
@@ -23,9 +31,49 @@
     border: 3px solid #333;
     box-shadow: 0 0 30px rgba(100,100,255,0.15);
   }
+  #rotate-prompt {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #0a0a1a;
+    z-index: 9999;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-family: 'Press Start 2P', monospace;
+    text-align: center;
+    padding: 20px;
+  }
+  #rotate-prompt .phone-icon {
+    font-size: 48px;
+    margin-bottom: 20px;
+    animation: rotate-phone 1.5s ease-in-out infinite;
+  }
+  #rotate-prompt p {
+    font-size: 10px;
+    line-height: 2;
+    color: #aabbcc;
+  }
+  @keyframes rotate-phone {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(90deg); }
+  }
+  @media screen and (orientation: portrait) and (max-width: 1024px) {
+    #rotate-prompt { display: flex; }
+    canvas { display: none; }
+  }
+  @media screen and (orientation: landscape) {
+    #rotate-prompt { display: none !important; }
+    canvas { display: block !important; }
+  }
 </style>
 </head>
 <body>
+<div id="rotate-prompt">
+  <div class="phone-icon">📱</div>
+  <p>ROTATE YOUR DEVICE<br>TO LANDSCAPE MODE</p>
+</div>
 <canvas id="game"></canvas>
 <script>
 // ============================================================
@@ -37,18 +85,21 @@ const ctx = canvas.getContext('2d');
 
 const NATIVE_W = 512;
 const NATIVE_H = 320;
-const SCALE = Math.max(1, Math.min(
-  Math.floor(window.innerWidth / NATIVE_W),
-  Math.floor(window.innerHeight / NATIVE_H),
-  3
-));
-// On small screens, use fractional scaling to fill width
-const mobileScale = Math.min(window.innerWidth / NATIVE_W, window.innerHeight / NATIVE_H);
-const finalScale = (SCALE < 2 && mobileScale < 2) ? mobileScale : SCALE;
 canvas.width = NATIVE_W;
 canvas.height = NATIVE_H;
-canvas.style.width = Math.floor(NATIVE_W * finalScale) + 'px';
-canvas.style.height = Math.floor(NATIVE_H * finalScale) + 'px';
+
+function resizeCanvas() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const scaleX = w / NATIVE_W;
+  const scaleY = h / NATIVE_H;
+  const scale = Math.min(scaleX, scaleY, 3);
+  canvas.style.width = Math.floor(NATIVE_W * scale) + 'px';
+  canvas.style.height = Math.floor(NATIVE_H * scale) + 'px';
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', () => { setTimeout(resizeCanvas, 100); });
 
 // ============================================================
 // 8-BIT SOUND ENGINE (Web Audio API)
@@ -390,6 +441,12 @@ function updateTouchButtons() {
 
 function handleStart(e) {
   initAudio();
+  // Try to lock landscape on mobile
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
+  } catch(e) {}
   if (state === GameState.TITLE) { startGame(); return; }
   if (state === GameState.GAMEOVER) { startGame(); return; }
 }
